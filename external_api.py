@@ -1,4 +1,4 @@
-"""
+﻿"""
 external_api.py
 ----------------
 Thin wrapper around the OpenFoodFacts public API.
@@ -20,6 +20,13 @@ BASE_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl"
 
 REQUEST_TIMEOUT = 10  # seconds
 
+# OpenFoodFacts blocks requests that don't identify themselves with a
+# descriptive User-Agent (returns 403 Forbidden otherwise). See their
+# API usage guidelines: https://openfoodfacts.github.io/openfoodfacts-server/api/
+HEADERS = {
+    "User-Agent": "InventoryManagementSystem/1.0 (student lab project; contact: dev@example.com)"
+}
+
 
 class ExternalAPIError(Exception):
     """Raised when the OpenFoodFacts API is unreachable or returns bad data."""
@@ -33,8 +40,6 @@ def _normalize(product: dict) -> dict:
         "category": (product.get("categories") or "").split(",")[0].strip() or None,
         "description": product.get("generic_name") or product.get("ingredients_text") or "",
         "image_url": product.get("image_url") or product.get("image_front_url"),
-        # OpenFoodFacts has no price/quantity-in-stock concept, so these
-        # default to sane placeholders the user can edit after import.
         "price": 0.0,
         "quantity": 0,
         "source": "openfoodfacts",
@@ -44,7 +49,11 @@ def _normalize(product: dict) -> dict:
 def fetch_by_barcode(barcode: str) -> dict:
     """Look up a single product by its barcode. Returns None if not found."""
     try:
-        resp = requests.get(BASE_PRODUCT_URL.format(barcode=barcode), timeout=REQUEST_TIMEOUT)
+        resp = requests.get(
+            BASE_PRODUCT_URL.format(barcode=barcode),
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+        )
         resp.raise_for_status()
     except requests.RequestException as exc:
         raise ExternalAPIError(f"Failed to reach OpenFoodFacts: {exc}") from exc
@@ -65,7 +74,7 @@ def search_by_name(name: str, page_size: int = 10) -> list:
         "page_size": page_size,
     }
     try:
-        resp = requests.get(BASE_SEARCH_URL, params=params, timeout=REQUEST_TIMEOUT)
+        resp = requests.get(BASE_SEARCH_URL, params=params, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
     except requests.RequestException as exc:
         raise ExternalAPIError(f"Failed to reach OpenFoodFacts: {exc}") from exc
