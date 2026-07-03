@@ -1,45 +1,29 @@
-﻿"""
-external_api.py
-----------------
-Thin wrapper around the OpenFoodFacts public API.
-
-Docs: https://world.openfoodfacts.org/data
-
-We expose two lookups:
-    * fetch_by_barcode(barcode) -> single product dict (or None)
-    * search_by_name(name, page_size) -> list of product dicts
-
-Both return data already normalized into the shape our `items` table
-expects (name, barcode, category, description, image_url, price, quantity),
-so the Flask layer can pass the result straight into database.create_item().
-"""
-import requests
+﻿import requests
 
 BASE_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
 BASE_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl"
 
-REQUEST_TIMEOUT = 10  # seconds
+REQUEST_TIMEOUT = 10
 
-# OpenFoodFacts blocks requests that don't identify themselves with a
-# descriptive User-Agent (returns 403 Forbidden otherwise). See their
-# API usage guidelines: https://openfoodfacts.github.io/openfoodfacts-server/api/
+# OpenFoodFacts returns 403 without a descriptive User-Agent.
 HEADERS = {
     "User-Agent": "InventoryManagementSystem/1.0 (student lab project; contact: dev@example.com)"
 }
 
 
 class ExternalAPIError(Exception):
-    """Raised when the OpenFoodFacts API is unreachable or returns bad data."""
+    pass
 
 
 def _normalize(product: dict) -> dict:
-    """Map an OpenFoodFacts 'product' payload to our internal item schema."""
     return {
         "name": product.get("product_name") or product.get("generic_name") or "Unknown product",
         "barcode": product.get("code"),
         "category": (product.get("categories") or "").split(",")[0].strip() or None,
         "description": product.get("generic_name") or product.get("ingredients_text") or "",
         "image_url": product.get("image_url") or product.get("image_front_url"),
+        # OpenFoodFacts has no price/stock concept, default to 0 and let
+        # the user fill these in after import.
         "price": 0.0,
         "quantity": 0,
         "source": "openfoodfacts",
@@ -47,7 +31,6 @@ def _normalize(product: dict) -> dict:
 
 
 def fetch_by_barcode(barcode: str) -> dict:
-    """Look up a single product by its barcode. Returns None if not found."""
     try:
         resp = requests.get(
             BASE_PRODUCT_URL.format(barcode=barcode),
@@ -65,7 +48,6 @@ def fetch_by_barcode(barcode: str) -> dict:
 
 
 def search_by_name(name: str, page_size: int = 10) -> list:
-    """Search OpenFoodFacts by free-text product name."""
     params = {
         "search_terms": name,
         "search_simple": 1,

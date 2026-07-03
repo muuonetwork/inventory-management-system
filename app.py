@@ -1,26 +1,4 @@
-"""
-app.py
-------
-Flask REST API for the Inventory Management System.
-
-Routes
-------
-Health / helper
-    GET    /api/health
-
-Core CRUD (inventory items)
-    GET    /api/items                 - list all items (supports ?name=&category= filters)
-    GET    /api/items/<id>            - fetch a single item
-    POST   /api/items                 - create a new item
-    PATCH  /api/items/<id>            - partially update an item
-    DELETE /api/items/<id>            - delete an item
-
-External API integration (OpenFoodFacts)
-    GET    /api/external/barcode/<barcode>   - look up a product by barcode (no DB write)
-    GET    /api/external/search?name=...     - search products by name (no DB write)
-    POST   /api/items/import                 - look up externally AND save into inventory
-"""
-import os
+﻿import os
 
 from flask import Flask, jsonify, request
 
@@ -38,19 +16,16 @@ def create_app(db_path: str = None) -> Flask:
     database.init_db(conn)
     app.config["DB_CONN"] = conn
 
-    # ---------------------------------------------------------- helpers --
     def db():
         return app.config["DB_CONN"]
 
     def error(message: str, status: int = 400):
         return jsonify({"error": message}), status
 
-    # ------------------------------------------------------------ health --
     @app.get("/api/health")
     def health():
         return jsonify({"status": "ok", "service": "inventory-management-system"})
 
-    # -------------------------------------------------------------- READ --
     @app.get("/api/items")
     def list_items():
         name = request.args.get("name")
@@ -68,7 +43,6 @@ def create_app(db_path: str = None) -> Flask:
             return error("Item not found", 404)
         return jsonify(item)
 
-    # ------------------------------------------------------------ CREATE --
     @app.post("/api/items")
     def create_item():
         payload = request.get_json(silent=True)
@@ -80,7 +54,6 @@ def create_app(db_path: str = None) -> Flask:
         item = database.create_item(db(), payload)
         return jsonify(item), 201
 
-    # ------------------------------------------------------------ UPDATE --
     @app.patch("/api/items/<int:item_id>")
     def patch_item(item_id):
         payload = request.get_json(silent=True)
@@ -92,7 +65,6 @@ def create_app(db_path: str = None) -> Flask:
             return error("Item not found", 404)
         return jsonify(item)
 
-    # ------------------------------------------------------------ DELETE --
     @app.delete("/api/items/<int:item_id>")
     def remove_item(item_id):
         deleted = database.delete_item(db(), item_id)
@@ -100,7 +72,6 @@ def create_app(db_path: str = None) -> Flask:
             return error("Item not found", 404)
         return jsonify({"deleted": True, "id": item_id})
 
-    # ------------------------------------------------------ EXTERNAL API --
     @app.get("/api/external/barcode/<barcode>")
     def external_barcode(barcode):
         try:
@@ -125,10 +96,8 @@ def create_app(db_path: str = None) -> Flask:
 
     @app.post("/api/items/import")
     def import_item():
-        """Fetch a product from OpenFoodFacts and save it straight into inventory.
-
-        Body: {"barcode": "..."}  OR  {"name": "...", "index": 0}
-        Optional overrides (e.g. "quantity", "price") are merged in before saving.
+        """Body: {"barcode": "..."} OR {"name": "...", "index": 0}.
+        Any extra fields (e.g. "quantity", "price") get merged in before saving.
         """
         payload = request.get_json(silent=True) or {}
         barcode = payload.get("barcode")
@@ -152,7 +121,6 @@ def create_app(db_path: str = None) -> Flask:
         except external_api.ExternalAPIError as exc:
             return error(str(exc), 502)
 
-        # Allow the caller to override any field (e.g. set a real price/quantity)
         for key in ("price", "quantity", "category", "description", "name"):
             if key in payload:
                 product[key] = payload[key]
